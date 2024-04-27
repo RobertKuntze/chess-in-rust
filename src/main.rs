@@ -8,8 +8,9 @@ fn main() {
     loop {
         board.print_board();
         println!("Current Player: {}", if white {"White"} else {"Black"});
+        print!("{}", if board.is_check(white) {"You are in Check!\n"} else {""});
         print!("Choose a piece to move: \n");
-        let position = get_user_input();
+        let position = get_user_input_position();
         let piece = board.get_piece(position);
         match piece {
             None => continue,
@@ -17,17 +18,23 @@ fn main() {
                 if p.white != white {
                     print!("Please choose a piece of the correct color\n");
                     continue;
+                } if p.get_moves(&board.pieces).is_empty() {
+                    print!("No possible moves for this piece\n");
+                    continue;
                 }
                 let moves = p.get_moves(&board.pieces);
                 for m in moves {
                     print!("{:?} ", m);
                 }
                 print!("\nChoose a possible move:\n");
-                let new_position = get_user_input();
+                let new_position = get_user_input_position();
                 if p.get_moves(&board.pieces).contains(&new_position) {
                     board.move_piece(position, new_position);
+                    for piece in &mut board.pieces {
+                        piece.promote();
+                    }
                     if board.is_check(white) {
-                        print!("Check!\n");
+                        print!("Checkmate!\n");
                         return;
                     }
                     white = !white;
@@ -37,10 +44,30 @@ fn main() {
     }
 }
 
-fn get_user_input() -> Position {
+fn get_user_input_position() -> Position {
+    let mut input = String::new();
+    match std::io::stdin().read_line(&mut input) {
+        Ok(_) => {
+            match input.trim().len() {
+                2 => {},
+                _ => {
+                    println!("Invalid input please try again");
+                    return get_user_input_position();
+                }
+            }
+        },
+        Err(_) => {
+            println!("Invalid input please try again");
+            return get_user_input_position();
+        }
+    }
+    String::as_pos(&input.trim().to_string())
+}
+
+fn get_user_input_piece() -> char {
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
-    String::as_pos(&input.trim().to_string())
+    input.trim().chars().nth(0).unwrap()
 }
 
 struct Board{
@@ -63,7 +90,6 @@ impl Board{
     }
 
     fn print_board(&self) {
-        let file = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
         let rank = ['1', '2', '3', '4', '5', '6', '7', '8'];
         for i in 0..8 {
             print!("{} ", rank[i]);
@@ -329,6 +355,12 @@ impl Piece{
             _ => {}
         }
         moves
+    }
+
+    fn promote(&mut self) {
+        if self.piece == 'P' && (self.position.1 == 0 || self.position.1 == 7) {
+            self.piece = get_user_input_piece();
+        }
     }
 }
 
