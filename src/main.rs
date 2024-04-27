@@ -2,10 +2,25 @@ use std::fmt;
 
 fn main() {
     let board: Board = Board { pieces: Vec::new() };
-    let board: Board = board.initialize();
+    let mut board: Board = board.initialize();
 
+    // println!("{:?}", {Piece::get_moves(board.get_piece(Position(1,1)), &board.pieces)});
+    board.move_piece(Position::new('e', 2), Position::new('e', 4));
     board.print_board();
-    println!("{:?}", board.get_piece(Position(1, 1)).unwrap().get_moves(&board.pieces));
+
+    board.move_piece(Position::new('e', 1), Position::new('e', 2));
+    board.print_board();
+
+    let piece = match board.get_piece(String::as_pos("e2")) {
+        None => return,
+        Some(p) => p
+    };
+    piece.get_moves(&board.pieces);
+    // board.move_piece(Position(1,1), Position(1,3));
+    
+    
+    // println!("{:?}", {Piece::get_moves(board.get_piece(Position(1,3)), &board.pieces)});
+
 }
 
 struct Board{
@@ -16,13 +31,13 @@ impl Board{
     fn initialize(mut self) -> Board {
         let pieces = String::from("RkBQKBkR");
         for i in 0..pieces.len() {
-            self.pieces.push(Piece::new(Position(0, i.try_into().unwrap()), true, pieces.chars().nth(i).unwrap()));
+            self.pieces.push(Piece::new(Position(i.try_into().unwrap(), 0), true, pieces.chars().nth(i).unwrap()));
         } for i in 0..8 {
-            self.pieces.push(Piece::new(Position(1, i), true, 'P'));
+            self.pieces.push(Piece::new(Position(i, 1), true, 'P'));
         } for i in 0..8 {
-            self.pieces.push(Piece::new(Position(6, i), false, 'p'));
+            self.pieces.push(Piece::new(Position(i, 6), false, 'P'));
         } for i in 0..pieces.len() {
-            self.pieces.push(Piece::new(Position(7, i.try_into().unwrap()), false, pieces.chars().nth(i).unwrap()));
+            self.pieces.push(Piece::new(Position(i.try_into().unwrap(), 7), false, pieces.chars().nth(i).unwrap()));
         }
         self
     }
@@ -35,7 +50,7 @@ impl Board{
             for j in 0..8 {
                 let mut found = false;
                 for piece in &self.pieces {
-                    if piece.position.0 == i.try_into().unwrap() && piece.position.1 == j {
+                    if piece.position.1 == i.try_into().unwrap() && piece.position.0 == j {
                         print!("{:?} ", piece);
                         found = true;
                         break;
@@ -50,18 +65,28 @@ impl Board{
     }
 
     fn get_piece(&self, position: Position) -> Option<&Piece> {
-        for piece in &self.pieces {
-            if piece.position == position {
-                return Some(piece);
+        let index = self.pieces.get_index(position);
+        match index {
+            None => None,
+            Some(i) => Some(&self.pieces[i])
+        }
+    }
+
+    fn move_piece(&mut self, position: Position, new_position: Position) {
+        let index = self.pieces.get_index(position);
+        match index {
+            None => return,
+            Some(i) => {
+                self.pieces[i].position = new_position;
             }
         }
-        None
     }
 }
 
 
 trait VecPiece {
     fn get_piece(&self, position: Position) -> Option<&Piece>;
+    fn get_index(&self, position: Position) -> Option<usize>;
 }
 
 impl VecPiece for Vec<Piece> {
@@ -69,6 +94,15 @@ impl VecPiece for Vec<Piece> {
         for piece in self {
             if piece.position == position {
                 return Some(piece);
+            }
+        }
+        None
+    }
+
+    fn get_index(&self, position: Position) -> Option<usize> {
+        for (i, piece) in self.iter().enumerate() {
+            if piece.position == position {
+                return Some(i);
             }
         }
         None
@@ -91,6 +125,13 @@ impl fmt::Debug for Position{
     }
 }
 
+impl Position {
+    fn new(x: char, y: u8) -> Self {
+        Position(x as u8 - 97, y - 1)
+    }
+
+}
+
 #[derive(Copy, Clone, PartialEq)]
 struct Piece{
     position : Position,
@@ -103,28 +144,47 @@ impl Piece{
         Piece {position, white, piece}
     }
 
-    fn move_piece(&mut self, position: Position) {
-        self.position = position;
+    fn print_piece(&self) {
+        print!("{:?} {:?}", self.position, self.piece);
     }
 
-    fn get_moves(&self,pieces: &Vec<Piece>) -> Vec<Position> {
+    fn get_moves(&self ,pieces: &Vec<Piece>) -> Vec<Position> {
         let mut moves = Vec::new();
         let mut range = 1;
-        match self.piece {
+        let piece: Piece = *self;
+
+        match piece.piece {
             'P' => {
-                if self.white && self.position.0 == 1 {
+                if (piece.white && piece.position.1 == 1) || (!piece.white && piece.position.1 == 6) {
                     range = 2;
-                }
+                };
 
                 for i in 1..=range {
-                    let new_position = Position(self.position.0, self.position.1 + i);
+                    let new_position = Position(piece.position.0, if piece.white {piece.position.1 + i} else {piece.position.1 - i});
                     if pieces.get_piece(new_position).is_none() {
                         moves.push(new_position);
                     } else {
                         break;
                     }
                 }
-            }
+            },
+            'K' => {
+                for i in -1..=1_i8 {
+                    for j in -1..=1_i8 {
+                        if (i == 0 && j == 0) || (piece.position.0 as i8 + i < 0) || (piece.position.0 as i8 + i > 7) 
+                        || (piece.position.1 as i8 + j < 0) || (piece.position.1 as i8 + j > 7) {
+                            continue;
+                        }
+                        let new_position = Position::new((piece.position.0 as i8 + i + 97)as u8 as char,
+                        (piece.position.1 as i8 + j + 1) as u8);
+                        if pieces.get_piece(new_position).is_none() || pieces.get_piece(new_position).unwrap().white != piece.white {
+                            moves.push(new_position);
+                        }
+                    }
+                }
+                println!("{:?}", moves);
+            },
+            
             _ => {}
         }
         moves
@@ -137,3 +197,12 @@ impl fmt::Debug for Piece{
     }
 }
 
+trait AsPosition {
+    fn as_pos(string: &str) -> Position;
+}
+
+impl AsPosition for String {
+    fn as_pos(string: &str) -> Position {
+        Position(string.chars().nth(0).unwrap() as u8 - 97, string.chars().nth(1).unwrap() as u8 - 49)
+    }
+}
