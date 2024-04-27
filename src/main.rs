@@ -1,26 +1,46 @@
-use std::fmt;
+use std::{cmp, fmt, u8::MAX};
 
 fn main() {
     let board: Board = Board { pieces: Vec::new() };
     let mut board: Board = board.initialize();
+    let mut white = true;
 
-    // println!("{:?}", {Piece::get_moves(board.get_piece(Position(1,1)), &board.pieces)});
-    board.move_piece(Position::new('e', 2), Position::new('e', 4));
-    board.print_board();
+    loop {
+        board.print_board();
+        println!("Current Player: {}", if white {"White"} else {"Black"});
+        print!("Choose a piece to move: \n");
+        let position = get_user_input();
+        let piece = board.get_piece(position);
+        match piece {
+            None => continue,
+            Some(p) => {
+                if p.white != white {
+                    print!("Please choose a piece of the correct color\n");
+                    continue;
+                }
+                let moves = p.get_moves(&board.pieces);
+                for m in moves {
+                    print!("{:?} ", m);
+                }
+                print!("\nChoose a possible move:\n");
+                let new_position = get_user_input();
+                if p.get_moves(&board.pieces).contains(&new_position) {
+                    board.move_piece(position, new_position);
+                    if board.is_check(white) {
+                        print!("Check!\n");
+                        return;
+                    }
+                    white = !white;
+                }
+            }
+        }
+    }
+}
 
-    board.move_piece(Position::new('e', 1), Position::new('e', 2));
-    board.print_board();
-
-    let piece = match board.get_piece(String::as_pos("e2")) {
-        None => return,
-        Some(p) => p
-    };
-    piece.get_moves(&board.pieces);
-    // board.move_piece(Position(1,1), Position(1,3));
-    
-    
-    // println!("{:?}", {Piece::get_moves(board.get_piece(Position(1,3)), &board.pieces)});
-
+fn get_user_input() -> Position {
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).unwrap();
+    String::as_pos(&input.trim().to_string())
 }
 
 struct Board{
@@ -29,7 +49,7 @@ struct Board{
 
 impl Board{
     fn initialize(mut self) -> Board {
-        let pieces = String::from("RkBQKBkR");
+        let pieces = String::from("RNBQKBNR");
         for i in 0..pieces.len() {
             self.pieces.push(Piece::new(Position(i.try_into().unwrap(), 0), true, pieces.chars().nth(i).unwrap()));
         } for i in 0..8 {
@@ -74,12 +94,36 @@ impl Board{
 
     fn move_piece(&mut self, position: Position, new_position: Position) {
         let index = self.pieces.get_index(position);
+        let other_index = self.pieces.get_index(new_position);
         match index {
             None => return,
             Some(i) => {
+                if other_index.is_some() {
+                    self.pieces.remove(other_index.unwrap());
+                }
                 self.pieces[i].position = new_position;
             }
         }
+    }
+
+    fn is_check(&self, white: bool) -> bool {
+        let mut king_position = Position(0, 0);
+        for piece in &self.pieces {
+            if piece.piece == 'K' && piece.white == white {
+                king_position = piece.position;
+                break;
+            }
+        }
+        for piece in &self.pieces {
+            if piece.white == white {
+                continue;
+            }
+            let moves = piece.get_moves(&self.pieces);
+            if moves.contains(&king_position) {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -167,6 +211,11 @@ impl Piece{
                         break;
                     }
                 }
+                if pieces.get_piece(Position(cmp::max((piece.position.0 as i8 - 1) as u8, 0), if piece.white {piece.position.1 + 1} else {piece.position.1 - 1})).is_some() {
+                    moves.push(Position(piece.position.0 - 1, if piece.white {piece.position.1 + 1} else {piece.position.1 - 1}));
+                } if pieces.get_piece(Position(cmp::min((piece.position.0 as i8 + 1) as u8, 7), if piece.white {piece.position.1 + 1} else {piece.position.1 - 1})).is_some() {
+                    moves.push(Position(piece.position.0 + 1, if piece.white {piece.position.1 + 1} else {piece.position.1 - 1}));
+                }
             },
             'K' => {
                 for i in -1..=1_i8 {
@@ -182,7 +231,99 @@ impl Piece{
                         }
                     }
                 }
-                println!("{:?}", moves);
+            },
+            'Q' => {
+                for i in -1..=1_i8 {
+                    for j in -1..=1_i8 {
+                        if i == 0 && j == 0 {
+                            continue;
+                        }
+                        for k in 1..8 {
+                            if (piece.position.0 as i8 + i * k < 0) || (piece.position.0 as i8 + i * k > 7) 
+                            || (piece.position.1 as i8 + j * k < 0) || (piece.position.1 as i8 + j * k > 7) {
+                                break;
+                            }
+                            let new_position = Position::new((piece.position.0 as i8 + i * k + 97)as u8 as char,
+                            (piece.position.1 as i8 + j * k + 1) as u8);
+                            if pieces.get_piece(new_position).is_none() {
+                                moves.push(new_position);
+                            } else {
+                                if pieces.get_piece(new_position).unwrap().white != piece.white {
+                                    moves.push(new_position);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+            'R' => {
+                for i in -1..=1_i8 {
+                    for j in -1..=1_i8 {
+                        if i.abs() + j.abs() != 1{
+                            continue;
+                        }
+                        for k in 1..8 {
+                            if (piece.position.0 as i8 + i * k < 0) || (piece.position.0 as i8 + i * k > 7) 
+                            || (piece.position.1 as i8 + j * k < 0) || (piece.position.1 as i8 + j * k > 7) {
+                                break;
+                            }
+                            let new_position = Position::new((piece.position.0 as i8 + i * k + 97)as u8 as char,
+                            (piece.position.1 as i8 + j * k + 1) as u8);
+                            if pieces.get_piece(new_position).is_none() {
+                                moves.push(new_position);
+                            } else {
+                                if pieces.get_piece(new_position).unwrap().white != piece.white {
+                                    moves.push(new_position);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+            'B' => {
+                for i in -1..=1_i8 {
+                    for j in -1..=1_i8 {
+                        if i.abs() + j.abs() != 2 {
+                            continue;
+                        }
+                        for k in 1..8 {
+                            if (piece.position.0 as i8 + i * k < 0) || (piece.position.0 as i8 + i * k > 7) 
+                            || (piece.position.1 as i8 + j * k < 0) || (piece.position.1 as i8 + j * k > 7) {
+                                break;
+                            }
+                            let new_position = Position::new((piece.position.0 as i8 + i * k + 97)as u8 as char,
+                            (piece.position.1 as i8 + j * k + 1) as u8);
+                            if pieces.get_piece(new_position).is_none() {
+                                moves.push(new_position);
+                            } else {
+                                if pieces.get_piece(new_position).unwrap().white != piece.white {
+                                    moves.push(new_position);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+            'N' => {
+                for i in -2..=2_i8 {
+                    for j in -2..=2_i8 {
+                        if i.abs() + j.abs() != 3 || i == 0 || j == 0 {
+                            continue;
+                        }
+                        if (piece.position.0 as i8 + i < 0) || (piece.position.0 as i8 + i > 7) 
+                        || (piece.position.1 as i8 + j < 0) || (piece.position.1 as i8 + j > 7) {
+                            continue;
+                        }
+                        let new_position = Position::new((piece.position.0 as i8 + i + 97)as u8 as char,
+                        (piece.position.1 as i8 + j + 1) as u8);
+                        if pieces.get_piece(new_position).is_none() || pieces.get_piece(new_position).unwrap().white != piece.white {
+                            moves.push(new_position);
+                        }
+                    }
+                }
             },
             
             _ => {}
